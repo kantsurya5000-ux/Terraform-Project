@@ -4,45 +4,44 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
-variables:
-  terraformVersion: '1.8.5'
+stages:
+- stage: Terraform
+  jobs:
+  - job: Deploy
+    steps:
 
-steps:
+    # Install Terraform
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: 'latest'
 
-# Install Terraform
-- task: TerraformInstaller@1
-  displayName: Install Terraform
-  inputs:
-    terraformVersion: $(terraformVersion)
+    # Install Azure CLI (usually preinstalled, safe to keep)
+    - script: |
+        az version
+      displayName: "Check Azure CLI"
 
-# Terraform Init
-- task: TerraformTaskV4@4
-  displayName: Terraform Init
-  inputs:
-    provider: 'azurerm'
-    command: 'init'
-    backendServiceArm: 'azure-connection'
+    # Azure Login using Service Principal (NO service connection)
+    - script: |
+        echo "Logging into Azure..."
+        az login --service-principal \
+          -u $(ARM_CLIENT_ID) \
+          -p $(ARM_CLIENT_SECRET) \
+          --tenant $(ARM_TENANT_ID)
 
-# Terraform Validate
-- task: TerraformTaskV4@4
-  displayName: Terraform Validate
-  inputs:
-    provider: 'azurerm'
-    command: 'validate'
+        az account set --subscription $(ARM_SUBSCRIPTION_ID)
+      displayName: "Azure Login"
 
-# Terraform Plan
-- task: TerraformTaskV4@4
-  displayName: Terraform Plan
-  inputs:
-    provider: 'azurerm'
-    command: 'plan'
-    environmentServiceNameAzureRM: 'azure-connection'
+    # Terraform Init
+    - script: |
+        terraform init
+      displayName: "Terraform Init"
 
-# Terraform Apply
-- task: TerraformTaskV4@4
-  displayName: Terraform Apply
-  inputs:
-    provider: 'azurerm'
-    command: 'apply'
-    environmentServiceNameAzureRM: 'azure-connection'
-    commandOptions: '-auto-approve'
+    # Terraform Plan
+    - script: |
+        terraform plan -out=tfplan
+      displayName: "Terraform Plan"
+
+    # Terraform Apply
+    - script: |
+        terraform apply -auto-approve tfplan
+      displayName: "Terraform Apply"
