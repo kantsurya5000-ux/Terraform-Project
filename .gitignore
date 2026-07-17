@@ -1,0 +1,7 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Keep .terraform.lock.hcl committed so provider versions are reproducible.
