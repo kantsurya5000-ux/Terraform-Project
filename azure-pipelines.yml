@@ -10,7 +10,7 @@ pr:
 
 variables:
   terraformVersion: "1.8.5"
-  workingDirectory: "terraform"
+  workingDirectory: "."
   backendServiceArm: "Azuredevops"
 
 stages:
