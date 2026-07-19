@@ -15,7 +15,7 @@ terraform {
     resource_group_name  = "rgtest"
     storage_account_name = "testsuryast"
     container_name       = "suryacontainer"
-    key                  = var.key
+    key                  = "terraform.tfstate"
   }
 
 }
