@@ -11,3 +11,5 @@ cluster = {
 }
 
 namespaces = ["dev", "qa", "prod"]
+subscription_id = 8b004955-1932-487e-a46b-1d456748ea2b"
+tenant_id = "8f81e8bf-35c9-4c3c-b0c8-6debfb5ad60e"
