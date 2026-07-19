@@ -1,12 +1,12 @@
 trigger:
   branches:
     include:
-      - surya_main
+      - main_surya
 
 pr:
   branches:
     include:
-      - surya_main
+      - main_surya
 
 variables:
   terraformVersion: "1.8.5"
