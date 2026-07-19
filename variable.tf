@@ -1,3 +1,25 @@
+variable "subscription_id" {
+  description = "The subscription ID for the Azure account."
+  type        = string
+}
+
+variable "tenant_id" {
+  description = "The tenant ID for the Azure account."
+  type        = string
+}
+
+
+
+
+
+variable "key" {
+  description = "The key for the remote state file in the Azure Storage Account."
+  type        = string
+
+}
+
+
+
 variable "cluster" {
   description = "Configuration for the one shared AKS cluster."
   type = object({
