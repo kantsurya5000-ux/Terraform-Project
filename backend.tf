@@ -22,6 +22,7 @@ provider "azurerm" {
   use_cli         = true
   subscription_id = var.subscription_id
   tenant_id       = var.tenant_id
+  resource_provider_registrations = "none"
 }
 
 variable "subscription_id" {
