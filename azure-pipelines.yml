@@ -104,6 +104,8 @@ stages:
 
     steps:
 
+    - checkout: self
+
     - task: TerraformInstaller@1
       inputs:
         terraformVersion: $(terraformVersion)
@@ -151,6 +153,9 @@ stages:
 
           steps:
 
+          # deployment jobs don't auto-checkout — must be explicit
+          - checkout: self
+
           - download: current
             artifact: tfplan-dev
 
@@ -169,8 +174,10 @@ stages:
                 export TF_VAR_subscription_id=$(az account show --query id -o tsv)
                 export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
 
+                cp $(Pipeline.Workspace)/tfplan-dev/tfplan ./tfplan
+
                 terraform init
-                terraform workspace select dev
+                terraform workspace select dev || terraform workspace new dev
                 terraform apply tfplan
 
 
@@ -190,6 +197,8 @@ stages:
       vmImage: ubuntu-latest
 
     steps:
+
+    - checkout: self
 
     - task: TerraformInstaller@1
       inputs:
@@ -228,6 +237,8 @@ stages:
       vmImage: ubuntu-latest
 
     steps:
+
+    - checkout: self
 
     - task: TerraformInstaller@1
       inputs:
@@ -276,6 +287,8 @@ stages:
 
           steps:
 
+          - checkout: self
+
           - download: current
             artifact: tfplan-qa
 
@@ -294,8 +307,10 @@ stages:
                 export TF_VAR_subscription_id=$(az account show --query id -o tsv)
                 export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
 
+                cp $(Pipeline.Workspace)/tfplan-qa/tfplan ./tfplan
+
                 terraform init
-                terraform workspace select qa
+                terraform workspace select qa || terraform workspace new qa
                 terraform apply tfplan
 
 
@@ -315,6 +330,8 @@ stages:
       vmImage: ubuntu-latest
 
     steps:
+
+    - checkout: self
 
     - task: TerraformInstaller@1
       inputs:
@@ -363,6 +380,8 @@ stages:
 
           steps:
 
+          - checkout: self
+
           - download: current
             artifact: tfplan-prod
 
@@ -381,6 +400,8 @@ stages:
                 export TF_VAR_subscription_id=$(az account show --query id -o tsv)
                 export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
 
+                cp $(Pipeline.Workspace)/tfplan-prod/tfplan ./tfplan
+
                 terraform init
-                terraform workspace select prod
+                terraform workspace select prod || terraform workspace new prod
                 terraform apply tfplan
