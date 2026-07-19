@@ -40,7 +40,7 @@ stages:
     - script: |
         terraform fmt -check -recursive
       displayName: Terraform FMT
-    
+
     - script: |
         echo "Build.SourcesDirectory=$(Build.SourcesDirectory)"
         pwd
@@ -69,6 +69,7 @@ stages:
         checkov -d . --skip-path modules --output json --soft-fail > checkov-report.json
       workingDirectory: $(workingDirectory)
       displayName: Checkov Scan
+
     - publish: checkov-report.json
       artifact: checkov-report
 
@@ -107,13 +108,19 @@ stages:
       inputs:
         terraformVersion: $(terraformVersion)
 
-    - script: |
-        terraform init
-        terraform workspace select dev || terraform workspace new dev
-        terraform plan \
-          -var-file=dev/dev.tfvars \
-          -out=tfplan
-      workingDirectory: $(workingDirectory)
+    - task: AzureCLI@2
+      displayName: Terraform Init & Plan (DEV)
+      inputs:
+        azureSubscription: $(backendServiceArm)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        workingDirectory: $(workingDirectory)
+        inlineScript: |
+          terraform init
+          terraform workspace select dev || terraform workspace new dev
+          terraform plan \
+            -var-file=dev/dev.tfvars \
+            -out=tfplan
 
     - publish: $(workingDirectory)/tfplan
       artifact: tfplan-dev
@@ -148,11 +155,17 @@ stages:
             inputs:
               terraformVersion: $(terraformVersion)
 
-          - script: |
-              terraform init
-              terraform workspace select dev
-              terraform apply tfplan
-            workingDirectory: $(workingDirectory)
+          - task: AzureCLI@2
+            displayName: Terraform Apply (DEV)
+            inputs:
+              azureSubscription: $(backendServiceArm)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              workingDirectory: $(workingDirectory)
+              inlineScript: |
+                terraform init
+                terraform workspace select dev
+                terraform apply tfplan
 
 
 #==========================================================
@@ -172,13 +185,22 @@ stages:
 
     steps:
 
-    - script: |
-        terraform output
-      workingDirectory: $(workingDirectory)
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: $(terraformVersion)
 
-    - script: |
-        az aks list
-      displayName: Verify AKS
+    - task: AzureCLI@2
+      displayName: Terraform Output & Verify AKS
+      inputs:
+        azureSubscription: $(backendServiceArm)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        workingDirectory: $(workingDirectory)
+        inlineScript: |
+          terraform init
+          terraform workspace select dev
+          terraform output
+          az aks list
 
 
 #==========================================================
@@ -202,13 +224,19 @@ stages:
       inputs:
         terraformVersion: $(terraformVersion)
 
-    - script: |
-        terraform init
-        terraform workspace select qa || terraform workspace new qa
-        terraform plan \
-          -var-file=qa/qa.tfvars \
-          -out=tfplan
-      workingDirectory: $(workingDirectory)
+    - task: AzureCLI@2
+      displayName: Terraform Init & Plan (QA)
+      inputs:
+        azureSubscription: $(backendServiceArm)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        workingDirectory: $(workingDirectory)
+        inlineScript: |
+          terraform init
+          terraform workspace select qa || terraform workspace new qa
+          terraform plan \
+            -var-file=qa/qa.tfvars \
+            -out=tfplan
 
     - publish: $(workingDirectory)/tfplan
       artifact: tfplan-qa
@@ -243,11 +271,17 @@ stages:
             inputs:
               terraformVersion: $(terraformVersion)
 
-          - script: |
-              terraform init
-              terraform workspace select qa
-              terraform apply tfplan
-            workingDirectory: $(workingDirectory)
+          - task: AzureCLI@2
+            displayName: Terraform Apply (QA)
+            inputs:
+              azureSubscription: $(backendServiceArm)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              workingDirectory: $(workingDirectory)
+              inlineScript: |
+                terraform init
+                terraform workspace select qa
+                terraform apply tfplan
 
 
 #==========================================================
@@ -271,13 +305,19 @@ stages:
       inputs:
         terraformVersion: $(terraformVersion)
 
-    - script: |
-        terraform init
-        terraform workspace select prod || terraform workspace new prod
-        terraform plan \
-          -var-file=prod/prod.tfvars \
-          -out=tfplan
-      workingDirectory: $(workingDirectory)
+    - task: AzureCLI@2
+      displayName: Terraform Init & Plan (PROD)
+      inputs:
+        azureSubscription: $(backendServiceArm)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        workingDirectory: $(workingDirectory)
+        inlineScript: |
+          terraform init
+          terraform workspace select prod || terraform workspace new prod
+          terraform plan \
+            -var-file=prod/prod.tfvars \
+            -out=tfplan
 
     - publish: $(workingDirectory)/tfplan
       artifact: tfplan-prod
@@ -312,8 +352,14 @@ stages:
             inputs:
               terraformVersion: $(terraformVersion)
 
-          - script: |
-              terraform init
-              terraform workspace select prod
-              terraform apply tfplan
-            workingDirectory: $(workingDirectory)
+          - task: AzureCLI@2
+            displayName: Terraform Apply (PROD)
+            inputs:
+              azureSubscription: $(backendServiceArm)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              workingDirectory: $(workingDirectory)
+              inlineScript: |
+                terraform init
+                terraform workspace select prod
+                terraform apply tfplan
