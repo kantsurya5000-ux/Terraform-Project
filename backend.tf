@@ -11,10 +11,14 @@ terraform {
       version = "~> 2.36"
     }
   }
+  backend "azurerm" {
+    resource_group_name  = "rgtest"
+    storage_account_name = "testsuryast"
+    container_name       = "suryacontainer"
+    key                  = var.key
+  }
 
 
-
-}
 
 provider "azurerm" {
   features {}

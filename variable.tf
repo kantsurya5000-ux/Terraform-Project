@@ -1,3 +1,11 @@
+ variable "key" {
+  description = "The key for the remote state file in the Azure Storage Account."
+  type        = string
+
+}
+
+
+
 variable "cluster" {
   description = "Configuration for the one shared AKS cluster."
   type = object({
