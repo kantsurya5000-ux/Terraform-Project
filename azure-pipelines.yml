@@ -1,0 +1,45 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- none 
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  terraformVersion: "1.8.5"
+  workingDirectory: "terraform"
+  backendServiceArm: "Azuredevops"
+
+stages:
+  - stage : Validate
+    jobs:
+      - job: Validate
+        steps:
+        - checkout: self
+        - task: TerraformInstaller@1
+          inputs:
+            terraformVersion: $(terraformVersion)
+        - script: 
+            terraform fmt
+          displayName: Terraform fmt
+        - script: 
+            terraform init
+          displayName: Terraform init
+          workingDirectory: $(terraform)
+        - script: 
+            terraform validate
+          displayName: Terraform validate
+          workingDirectory: $(terraform)
+  - stage: 
+    jobs:
+      - job: 
+        steps:
+        - task:
+            
+          
+              
+            
