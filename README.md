@@ -24,8 +24,17 @@ Namespaces alone do not enforce complete isolation. Before deploying workloads, 
 
 ## Checkov scope
 
-Scan the deployable shared-cluster configuration with `checkov -d . --skip-path modules`. The `modules/` directory contains legacy, unreferenced infrastructure modules and is not part of this AKS deployment. Two exceptions are documented inline: API authorized IP ranges do not apply to a private AKS API, and platform-managed disk encryption is used unless your organization provides a customer-managed Disk Encryption Set.
+Scan the deployable shared-cluster configuration with `checkov -d . --skip-path modules --skip-path AKS`. The `modules/` and `AKS/` directories contain legacy, unreferenced infrastructure definitions and are not part of this AKS deployment. Two exceptions are documented inline: API authorized IP ranges do not apply to a private AKS API, and platform-managed disk encryption is used unless your organization provides a customer-managed Disk Encryption Set.
 
 ## Remote state
 
-The configuration uses Terraform's default local state until a backend is supplied. For team use, configure an Azure Storage backend securely at `terraform init` time rather than committing backend account details to source control.
+The pipeline uses an Azure DevOps variable group named `terraform-backend` to configure the Azure Storage backend securely. Create it at **Pipelines → Library → + Variable group**, then add these values:
+
+| Variable | Value |
+| --- | --- |
+| `TF_BACKEND_RESOURCE_GROUP` | Resource group containing the Terraform state storage account, for example `rg-terraform-state` |
+| `TF_BACKEND_STORAGE_ACCOUNT` | Globally unique storage account name, for example `sttfstate12345` |
+| `TF_BACKEND_CONTAINER` | Blob container name, for example `tfstate` |
+| `TF_BACKEND_KEY` | State-file name, for example `shared-aks.tfstate` |
+
+Create the resource group, storage account, and private blob container in Azure before running the pipeline. Link the `terraform-backend` variable group to the pipeline when prompted. The `Azuredevops` service connection needs the **Storage Blob Data Contributor** role on the state container.

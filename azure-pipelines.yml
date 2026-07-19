@@ -9,16 +9,13 @@ pr:
       - main_surya
 
 variables:
-  terraformVersion: "1.8.5"
-  workingDirectory: "."
-  azureServiceConnection: "Azuredevops"
-
-# Define these four values as pipeline variables or in a linked variable group.
-# The service connection must have Storage Blob Data Contributor on the state container.
-# TF_BACKEND_RESOURCE_GROUP
-# TF_BACKEND_STORAGE_ACCOUNT
-# TF_BACKEND_CONTAINER
-# TF_BACKEND_KEY
+  - group: terraform-backend
+  - name: terraformVersion
+    value: "1.8.5"
+  - name: workingDirectory
+    value: "."
+  - name: azureServiceConnection
+    value: "Azuredevops"
 
 stages:
   - stage: Validate
@@ -55,7 +52,7 @@ stages:
 
           - script: |
               python -m pip install --disable-pip-version-check checkov
-              checkov -d . --skip-path modules --output json --soft-fail > checkov-report.json
+              checkov -d . --skip-path modules --skip-path AKS --output json --soft-fail > checkov-report.json
             workingDirectory: $(workingDirectory)
             displayName: Checkov scan
 
@@ -81,15 +78,23 @@ stages:
             displayName: Terraform plan
             inputs:
               azureSubscription: $(azureServiceConnection)
+              addSpnToEnvironment: true
               scriptType: bash
               scriptLocation: inlineScript
               workingDirectory: $(workingDirectory)
               inlineScript: |
-                terraform init -input=false \
+                export ARM_USE_OIDC=true
+                export ARM_CLIENT_ID="$servicePrincipalId"
+                export ARM_TENANT_ID="$tenantId"
+                export ARM_SUBSCRIPTION_ID="$subscriptionId"
+                export ARM_OIDC_TOKEN="$idToken"
+
+                terraform init -reconfigure -input=false \
                   -backend-config="resource_group_name=$(TF_BACKEND_RESOURCE_GROUP)" \
                   -backend-config="storage_account_name=$(TF_BACKEND_STORAGE_ACCOUNT)" \
                   -backend-config="container_name=$(TF_BACKEND_CONTAINER)" \
                   -backend-config="key=$(TF_BACKEND_KEY)" \
+                  -backend-config="use_oidc=true" \
                   -backend-config="use_azuread_auth=true"
                 terraform plan -input=false -out=tfplan
 
@@ -125,15 +130,23 @@ stages:
                   displayName: Terraform apply
                   inputs:
                     azureSubscription: $(azureServiceConnection)
+                    addSpnToEnvironment: true
                     scriptType: bash
                     scriptLocation: inlineScript
                     workingDirectory: $(workingDirectory)
                     inlineScript: |
-                      terraform init -input=false \
+                      export ARM_USE_OIDC=true
+                      export ARM_CLIENT_ID="$servicePrincipalId"
+                      export ARM_TENANT_ID="$tenantId"
+                      export ARM_SUBSCRIPTION_ID="$subscriptionId"
+                      export ARM_OIDC_TOKEN="$idToken"
+
+                      terraform init -reconfigure -input=false \
                         -backend-config="resource_group_name=$(TF_BACKEND_RESOURCE_GROUP)" \
                         -backend-config="storage_account_name=$(TF_BACKEND_STORAGE_ACCOUNT)" \
                         -backend-config="container_name=$(TF_BACKEND_CONTAINER)" \
                         -backend-config="key=$(TF_BACKEND_KEY)" \
+                        -backend-config="use_oidc=true" \
                         -backend-config="use_azuread_auth=true"
                       terraform apply -input=false "$(Pipeline.Workspace)/shared-aks-plan/tfplan"
 
@@ -155,20 +168,30 @@ stages:
             displayName: Verify cluster and namespaces
             inputs:
               azureSubscription: $(azureServiceConnection)
+              addSpnToEnvironment: true
               scriptType: bash
               scriptLocation: inlineScript
               workingDirectory: $(workingDirectory)
               inlineScript: |
-                terraform init -input=false \
+                export ARM_USE_OIDC=true
+                export ARM_CLIENT_ID="$servicePrincipalId"
+                export ARM_TENANT_ID="$tenantId"
+                export ARM_SUBSCRIPTION_ID="$subscriptionId"
+                export ARM_OIDC_TOKEN="$idToken"
+
+                terraform init -reconfigure -input=false \
                   -backend-config="resource_group_name=$(TF_BACKEND_RESOURCE_GROUP)" \
                   -backend-config="storage_account_name=$(TF_BACKEND_STORAGE_ACCOUNT)" \
                   -backend-config="container_name=$(TF_BACKEND_CONTAINER)" \
                   -backend-config="key=$(TF_BACKEND_KEY)" \
+                  -backend-config="use_oidc=true" \
                   -backend-config="use_azuread_auth=true"
                 terraform output
+                CLUSTER_NAME="$(terraform output -raw cluster_name)"
+                RESOURCE_GROUP="$(terraform output -raw cluster_resource_group)"
                 az aks get-credentials \
-                  --resource-group rg-aks-shared \
-                  --name aks-shared-devqa-prod \
+                  --resource-group "$RESOURCE_GROUP" \
+                  --name "$CLUSTER_NAME" \
                   --overwrite-existing
                 kubelogin convert-kubeconfig -l azurecli
                 kubectl get namespaces dev qa prod
