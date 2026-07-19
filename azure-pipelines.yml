@@ -111,7 +111,7 @@ stages:
         terraform init
         terraform workspace select dev || terraform workspace new dev
         terraform plan \
-          -var-file=environments/dev.tfvars \
+          -var-file=dev/dev.tfvars \
           -out=tfplan
       workingDirectory: $(workingDirectory)
 
@@ -206,7 +206,7 @@ stages:
         terraform init
         terraform workspace select qa || terraform workspace new qa
         terraform plan \
-          -var-file=environments/qa.tfvars \
+          -var-file=qa/qa.tfvars \
           -out=tfplan
       workingDirectory: $(workingDirectory)
 
@@ -275,7 +275,7 @@ stages:
         terraform init
         terraform workspace select prod || terraform workspace new prod
         terraform plan \
-          -var-file=environments/prod.tfvars \
+          -var-file=prod/prod.tfvars \
           -out=tfplan
       workingDirectory: $(workingDirectory)
 
