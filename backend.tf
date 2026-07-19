@@ -18,7 +18,7 @@ terraform {
     key                  = var.key
   }
 
-
+}
 
   provider "azurerm" {
     features {}
@@ -28,7 +28,7 @@ terraform {
     tenant_id                       = var.tenant_id
     resource_provider_registrations = "none"
   }
-}
+
 
 
 
