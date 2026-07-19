@@ -12,6 +12,7 @@ variables:
   terraformVersion: "1.8.5"
   workingDirectory: "."
   backendServiceArm: "Azuredevops"
+  system.debug: true
 
 stages:
 
@@ -65,9 +66,18 @@ stages:
 
     - script: |
         pip install checkov
-        checkov -d .
+        checkov -d . --output json > checkov-report.json
       workingDirectory: $(workingDirectory)
       displayName: Checkov Scan
+    - publish: checkov-report.json
+      artifact: checkov-report
+
+    - script: |
+        pwd
+        find . -name "*.tf"
+        echo "----------------------"
+        cat modules/azurerm_aks/main.tf
+      displayName: Debug Terraform Files
 
     - script: |
         docker run --rm \
