@@ -45,6 +45,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
     name       = "default"
     node_count = each.value.node_count
     vm_size    = each.value.vm_size
+    host_encryption_enabled = true
   }
 
   identity {
