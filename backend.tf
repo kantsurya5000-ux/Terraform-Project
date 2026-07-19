@@ -16,7 +16,7 @@ terraform {
 
 }
 
-  provider "azurerm" {
+provider "azurerm" {
   features {}
   # ye add karo:
   use_cli         = true
