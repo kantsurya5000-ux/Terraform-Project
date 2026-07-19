@@ -111,7 +111,7 @@ provider "kubernetes" {
 }
 
 resource "kubernetes_namespace_v1" "environment" {
-  for_each = toset(var.namespaces)
+  for_each = var.namespaces
 
   metadata {
     name = each.value

@@ -9,8 +9,10 @@ terraform {
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = "~> 2.36"
-    }
   }
+
+  backend "azurerm" {}
+}
   backend "azurerm" {
     resource_group_name  = "rgtest"
     storage_account_name = "testsuryast"
@@ -24,8 +26,8 @@ provider "azurerm" {
   features {}
   # ye add karo:
   use_cli                         = true
-  subscription_id                 = var.subscription_id
-  tenant_id                       = var.tenant_id
+  subscription_id                 = "8b004955-1932-487e-a46b-1d456748ea2b"
+  tenant_id                       = "8f81e8bf-35c9-4c3c-b0c8-6debfb5ad60e"
   resource_provider_registrations = "none"
 }
 
@@ -33,6 +35,4 @@ provider "azurerm" {
 
 
 
-# A remote state backend can be supplied at init time, for example:
-# terraform init -backend-config="resource_group_name=..." ...
-# Keeping it out of source avoids hard-coded storage-account details.
+# Backend values are provided securely by the Azure DevOps pipeline at init time.

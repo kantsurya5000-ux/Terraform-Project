@@ -11,397 +11,164 @@ pr:
 variables:
   terraformVersion: "1.8.5"
   workingDirectory: "."
-  backendServiceArm: "Azuredevops"
-  system.debug: true
+  azureServiceConnection: "Azuredevops"
+
+# Define these four values as pipeline variables or in a linked variable group.
+# The service connection must have Storage Blob Data Contributor on the state container.
+# TF_BACKEND_RESOURCE_GROUP
+# TF_BACKEND_STORAGE_ACCOUNT
+# TF_BACKEND_CONTAINER
+# TF_BACKEND_KEY
 
 stages:
-
-#==========================================================
-# VALIDATION
-#==========================================================
-- stage: Validate
-  displayName: "Terraform Validation"
-
-  jobs:
-
-  - job: Validate
-
-    pool:
-      vmImage: ubuntu-latest
-
-    steps:
-
-    - checkout: self
-
-    - task: TerraformInstaller@1
-      inputs:
-        terraformVersion: $(terraformVersion)
-
-    - script: |
-        terraform fmt -check -recursive
-      displayName: Terraform FMT
-
-    - script: |
-        echo "Build.SourcesDirectory=$(Build.SourcesDirectory)"
-        pwd
-        ls -la
-        find . -maxdepth 2
-      displayName: "Debug Repository"
-
-    - script: |
-        terraform init -backend=false
-      workingDirectory: $(workingDirectory)
-      displayName: Terraform Init
-
-    - script: |
-        terraform validate
-      workingDirectory: $(workingDirectory)
-      displayName: Terraform Validate
-
-    - script: |
-        curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-        tflint
-      workingDirectory: $(workingDirectory)
-      displayName: TFLint
-
-    - script: |
-        pip install checkov
-        checkov -d . --skip-path modules --output json --soft-fail > checkov-report.json
-      workingDirectory: $(workingDirectory)
-      displayName: Checkov Scan
-
-    - publish: checkov-report.json
-      artifact: checkov-report
-
-    - script: |
-        pwd
-        find . -name "*.tf"
-        echo "----------------------"
-        cat modules/azurerm_aks/main.tf
-      displayName: Debug Terraform Files
-
-    - script: |
-        docker run --rm \
-        -v $(System.DefaultWorkingDirectory):/project \
-        aquasec/trivy config /project
-      displayName: Trivy Config Scan
-
-
-#==========================================================
-# PLAN DEV
-#==========================================================
-
-- stage: Plan_DEV
-
-  dependsOn: Validate
-
-  jobs:
-
-  - job: TerraformPlanDEV
-
-    pool:
-      vmImage: ubuntu-latest
-
-    steps:
-
-    - checkout: self
-
-    - task: TerraformInstaller@1
-      inputs:
-        terraformVersion: $(terraformVersion)
-
-    - task: AzureCLI@2
-      displayName: Terraform Init & Plan (DEV)
-      inputs:
-        azureSubscription: $(backendServiceArm)
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        workingDirectory: $(workingDirectory)
-        inlineScript: |
-          export TF_VAR_subscription_id=$(az account show --query id -o tsv)
-          export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
-
-          terraform init
-          terraform workspace select dev || terraform workspace new dev
-          terraform plan \
-            -var-file=dev/dev.tfvars \
-            -out=tfplan
-
-    - publish: $(workingDirectory)/tfplan
-      artifact: tfplan-dev
-
-
-#==========================================================
-# APPLY DEV
-#==========================================================
-
-- stage: Apply_DEV
-
-  dependsOn: Plan_DEV
-
-  jobs:
-
-  - deployment: ApplyDEV
-
-    environment: DEV
-
-    strategy:
-
-      runOnce:
-
-        deploy:
-
-          steps:
-
-          # deployment jobs don't auto-checkout — must be explicit
+  - stage: Validate
+    displayName: Validate and scan
+    jobs:
+      - job: TerraformValidation
+        pool:
+          vmImage: ubuntu-latest
+        steps:
           - checkout: self
 
-          - download: current
-            artifact: tfplan-dev
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - script: terraform fmt -check -recursive
+            workingDirectory: $(workingDirectory)
+            displayName: Terraform formatting
+
+          - script: terraform init -backend=false -input=false
+            workingDirectory: $(workingDirectory)
+            displayName: Terraform initialization
+
+          - script: terraform validate
+            workingDirectory: $(workingDirectory)
+            displayName: Terraform validation
+
+          - script: |
+              curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+              tflint --init
+              tflint
+            workingDirectory: $(workingDirectory)
+            displayName: TFLint
+
+          - script: |
+              python -m pip install --disable-pip-version-check checkov
+              checkov -d . --skip-path modules --output json --soft-fail > checkov-report.json
+            workingDirectory: $(workingDirectory)
+            displayName: Checkov scan
+
+          - publish: $(workingDirectory)/checkov-report.json
+            artifact: checkov-report
+            displayName: Publish Checkov report
+
+  - stage: Plan
+    displayName: Plan shared AKS cluster
+    dependsOn: Validate
+    jobs:
+      - job: TerraformPlan
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
 
           - task: TerraformInstaller@1
             inputs:
               terraformVersion: $(terraformVersion)
 
           - task: AzureCLI@2
-            displayName: Terraform Apply (DEV)
+            displayName: Terraform plan
             inputs:
-              azureSubscription: $(backendServiceArm)
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
               workingDirectory: $(workingDirectory)
               inlineScript: |
-                export TF_VAR_subscription_id=$(az account show --query id -o tsv)
-                export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
+                terraform init -input=false \
+                  -backend-config="resource_group_name=$(TF_BACKEND_RESOURCE_GROUP)" \
+                  -backend-config="storage_account_name=$(TF_BACKEND_STORAGE_ACCOUNT)" \
+                  -backend-config="container_name=$(TF_BACKEND_CONTAINER)" \
+                  -backend-config="key=$(TF_BACKEND_KEY)" \
+                  -backend-config="use_azuread_auth=true"
+                terraform plan -input=false -out=tfplan
 
-                cp $(Pipeline.Workspace)/tfplan-dev/tfplan ./tfplan
+          - publish: $(workingDirectory)/tfplan
+            artifact: shared-aks-plan
+            displayName: Publish Terraform plan
 
-                terraform init
-                terraform workspace select dev || terraform workspace new dev
-                terraform apply tfplan
+  - stage: Apply
+    displayName: Apply shared AKS cluster
+    dependsOn: Plan
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main_surya'))
+    jobs:
+      - deployment: ApplySharedAks
+        displayName: Apply shared AKS cluster
+        environment: shared-aks
+        # Configure approval checks on the shared-aks Azure DevOps environment.
+        pool:
+          name: aks-private-agent-pool
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
 
+                - download: current
+                  artifact: shared-aks-plan
 
-#==========================================================
-# POST VALIDATION
-#==========================================================
+                - task: TerraformInstaller@1
+                  inputs:
+                    terraformVersion: $(terraformVersion)
 
-- stage: PostValidation
+                - task: AzureCLI@2
+                  displayName: Terraform apply
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    workingDirectory: $(workingDirectory)
+                    inlineScript: |
+                      terraform init -input=false \
+                        -backend-config="resource_group_name=$(TF_BACKEND_RESOURCE_GROUP)" \
+                        -backend-config="storage_account_name=$(TF_BACKEND_STORAGE_ACCOUNT)" \
+                        -backend-config="container_name=$(TF_BACKEND_CONTAINER)" \
+                        -backend-config="key=$(TF_BACKEND_KEY)" \
+                        -backend-config="use_azuread_auth=true"
+                      terraform apply -input=false "$(Pipeline.Workspace)/shared-aks-plan/tfplan"
 
-  dependsOn: Apply_DEV
-
-  jobs:
-
-  - job: Verify
-
-    pool:
-      vmImage: ubuntu-latest
-
-    steps:
-
-    - checkout: self
-
-    - task: TerraformInstaller@1
-      inputs:
-        terraformVersion: $(terraformVersion)
-
-    - task: AzureCLI@2
-      displayName: Terraform Output & Verify AKS
-      inputs:
-        azureSubscription: $(backendServiceArm)
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        workingDirectory: $(workingDirectory)
-        inlineScript: |
-          export TF_VAR_subscription_id=$(az account show --query id -o tsv)
-          export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
-
-          terraform init
-          terraform workspace select dev
-          terraform output
-          az aks list
-
-
-#==========================================================
-# PLAN QA
-#==========================================================
-
-- stage: Plan_QA
-
-  dependsOn: PostValidation
-
-  jobs:
-
-  - job: TerraformPlanQA
-
-    pool:
-      vmImage: ubuntu-latest
-
-    steps:
-
-    - checkout: self
-
-    - task: TerraformInstaller@1
-      inputs:
-        terraformVersion: $(terraformVersion)
-
-    - task: AzureCLI@2
-      displayName: Terraform Init & Plan (QA)
-      inputs:
-        azureSubscription: $(backendServiceArm)
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        workingDirectory: $(workingDirectory)
-        inlineScript: |
-          export TF_VAR_subscription_id=$(az account show --query id -o tsv)
-          export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
-
-          terraform init
-          terraform workspace select qa || terraform workspace new qa
-          terraform plan \
-            -var-file=qa/qa.tfvars \
-            -out=tfplan
-
-    - publish: $(workingDirectory)/tfplan
-      artifact: tfplan-qa
-
-
-#==========================================================
-# APPLY QA
-#==========================================================
-
-- stage: Apply_QA
-
-  dependsOn: Plan_QA
-
-  jobs:
-
-  - deployment: ApplyQA
-
-    environment: QA
-
-    strategy:
-
-      runOnce:
-
-        deploy:
-
-          steps:
-
+  - stage: Verify
+    displayName: Verify shared AKS cluster
+    dependsOn: Apply
+    jobs:
+      - job: VerifyCluster
+        pool:
+          name: aks-private-agent-pool
+        steps:
           - checkout: self
-
-          - download: current
-            artifact: tfplan-qa
 
           - task: TerraformInstaller@1
             inputs:
               terraformVersion: $(terraformVersion)
 
           - task: AzureCLI@2
-            displayName: Terraform Apply (QA)
+            displayName: Verify cluster and namespaces
             inputs:
-              azureSubscription: $(backendServiceArm)
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
               workingDirectory: $(workingDirectory)
               inlineScript: |
-                export TF_VAR_subscription_id=$(az account show --query id -o tsv)
-                export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
-
-                cp $(Pipeline.Workspace)/tfplan-qa/tfplan ./tfplan
-
-                terraform init
-                terraform workspace select qa || terraform workspace new qa
-                terraform apply tfplan
-
-
-#==========================================================
-# PLAN PROD
-#==========================================================
-
-- stage: Plan_PROD
-
-  dependsOn: Apply_QA
-
-  jobs:
-
-  - job: TerraformPlanPROD
-
-    pool:
-      vmImage: ubuntu-latest
-
-    steps:
-
-    - checkout: self
-
-    - task: TerraformInstaller@1
-      inputs:
-        terraformVersion: $(terraformVersion)
-
-    - task: AzureCLI@2
-      displayName: Terraform Init & Plan (PROD)
-      inputs:
-        azureSubscription: $(backendServiceArm)
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        workingDirectory: $(workingDirectory)
-        inlineScript: |
-          export TF_VAR_subscription_id=$(az account show --query id -o tsv)
-          export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
-
-          terraform init
-          terraform workspace select prod || terraform workspace new prod
-          terraform plan \
-            -var-file=prod/prod.tfvars \
-            -out=tfplan
-
-    - publish: $(workingDirectory)/tfplan
-      artifact: tfplan-prod
-
-
-#==========================================================
-# APPLY PROD
-#==========================================================
-
-- stage: Apply_PROD
-
-  dependsOn: Plan_PROD
-
-  jobs:
-
-  - deployment: ApplyPROD
-
-    environment: Production
-
-    strategy:
-
-      runOnce:
-
-        deploy:
-
-          steps:
-
-          - checkout: self
-
-          - download: current
-            artifact: tfplan-prod
-
-          - task: TerraformInstaller@1
-            inputs:
-              terraformVersion: $(terraformVersion)
-
-          - task: AzureCLI@2
-            displayName: Terraform Apply (PROD)
-            inputs:
-              azureSubscription: $(backendServiceArm)
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              workingDirectory: $(workingDirectory)
-              inlineScript: |
-                export TF_VAR_subscription_id=$(az account show --query id -o tsv)
-                export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
-
-                cp $(Pipeline.Workspace)/tfplan-prod/tfplan ./tfplan
-
-                terraform init
-                terraform workspace select prod || terraform workspace new prod
-                terraform apply tfplan
+                terraform init -input=false \
+                  -backend-config="resource_group_name=$(TF_BACKEND_RESOURCE_GROUP)" \
+                  -backend-config="storage_account_name=$(TF_BACKEND_STORAGE_ACCOUNT)" \
+                  -backend-config="container_name=$(TF_BACKEND_CONTAINER)" \
+                  -backend-config="key=$(TF_BACKEND_KEY)" \
+                  -backend-config="use_azuread_auth=true"
+                terraform output
+                az aks get-credentials \
+                  --resource-group rg-aks-shared \
+                  --name aks-shared-devqa-prod \
+                  --overwrite-existing
+                kubelogin convert-kubeconfig -l azurecli
+                kubectl get namespaces dev qa prod
