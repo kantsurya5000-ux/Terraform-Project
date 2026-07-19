@@ -1,13 +1,12 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
 trigger:
-- none 
+  branches:
+    include:
+      - surya_main
 
-pool:
-  vmImage: ubuntu-latest
+pr:
+  branches:
+    include:
+      - surya_main
 
 variables:
   terraformVersion: "1.8.5"
@@ -15,31 +14,289 @@ variables:
   backendServiceArm: "Azuredevops"
 
 stages:
-  - stage : Validate
-    jobs:
-      - job: Validate
-        steps:
-        - checkout: self
-        - task: TerraformInstaller@1
-          inputs:
-            terraformVersion: $(terraformVersion)
-        - script: 
-            terraform fmt
-          displayName: Terraform fmt
-        - script: 
-            terraform init
-          displayName: Terraform init
-          workingDirectory: $(terraform)
-        - script: 
-            terraform validate
-          displayName: Terraform validate
-          workingDirectory: $(terraform)
-  - stage: 
-    jobs:
-      - job: 
-        steps:
-        - task:
-            
-          
-              
-            
+
+#==========================================================
+# VALIDATION
+#==========================================================
+- stage: Validate
+  displayName: "Terraform Validation"
+
+  jobs:
+
+  - job: Validate
+
+    pool:
+      vmImage: ubuntu-latest
+
+    steps:
+
+    - checkout: self
+
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - script: |
+        terraform fmt -check -recursive
+      displayName: Terraform FMT
+
+    - script: |
+        terraform init -backend=false
+      workingDirectory: $(workingDirectory)
+      displayName: Terraform Init
+
+    - script: |
+        terraform validate
+      workingDirectory: $(workingDirectory)
+      displayName: Terraform Validate
+
+    - script: |
+        curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+        tflint
+      workingDirectory: $(workingDirectory)
+      displayName: TFLint
+
+    - script: |
+        pip install checkov
+        checkov -d .
+      workingDirectory: $(workingDirectory)
+      displayName: Checkov Scan
+
+    - script: |
+        docker run --rm \
+        -v $(System.DefaultWorkingDirectory):/project \
+        aquasec/trivy config /project
+      displayName: Trivy Config Scan
+
+
+#==========================================================
+# PLAN DEV
+#==========================================================
+
+- stage: Plan_DEV
+
+  dependsOn: Validate
+
+  jobs:
+
+  - job: TerraformPlanDEV
+
+    pool:
+      vmImage: ubuntu-latest
+
+    steps:
+
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - script: |
+        terraform init
+        terraform workspace select dev || terraform workspace new dev
+        terraform plan \
+          -var-file=environments/dev.tfvars \
+          -out=tfplan
+      workingDirectory: $(workingDirectory)
+
+    - publish: $(workingDirectory)/tfplan
+      artifact: tfplan-dev
+
+
+#==========================================================
+# APPLY DEV
+#==========================================================
+
+- stage: Apply_DEV
+
+  dependsOn: Plan_DEV
+
+  jobs:
+
+  - deployment: ApplyDEV
+
+    environment: DEV
+
+    strategy:
+
+      runOnce:
+
+        deploy:
+
+          steps:
+
+          - download: current
+            artifact: tfplan-dev
+
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - script: |
+              terraform init
+              terraform workspace select dev
+              terraform apply tfplan
+            workingDirectory: $(workingDirectory)
+
+
+#==========================================================
+# POST VALIDATION
+#==========================================================
+
+- stage: PostValidation
+
+  dependsOn: Apply_DEV
+
+  jobs:
+
+  - job: Verify
+
+    pool:
+      vmImage: ubuntu-latest
+
+    steps:
+
+    - script: |
+        terraform output
+      workingDirectory: $(workingDirectory)
+
+    - script: |
+        az aks list
+      displayName: Verify AKS
+
+
+#==========================================================
+# PLAN QA
+#==========================================================
+
+- stage: Plan_QA
+
+  dependsOn: PostValidation
+
+  jobs:
+
+  - job: TerraformPlanQA
+
+    pool:
+      vmImage: ubuntu-latest
+
+    steps:
+
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - script: |
+        terraform init
+        terraform workspace select qa || terraform workspace new qa
+        terraform plan \
+          -var-file=environments/qa.tfvars \
+          -out=tfplan
+      workingDirectory: $(workingDirectory)
+
+    - publish: $(workingDirectory)/tfplan
+      artifact: tfplan-qa
+
+
+#==========================================================
+# APPLY QA
+#==========================================================
+
+- stage: Apply_QA
+
+  dependsOn: Plan_QA
+
+  jobs:
+
+  - deployment: ApplyQA
+
+    environment: QA
+
+    strategy:
+
+      runOnce:
+
+        deploy:
+
+          steps:
+
+          - download: current
+            artifact: tfplan-qa
+
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - script: |
+              terraform init
+              terraform workspace select qa
+              terraform apply tfplan
+            workingDirectory: $(workingDirectory)
+
+
+#==========================================================
+# PLAN PROD
+#==========================================================
+
+- stage: Plan_PROD
+
+  dependsOn: Apply_QA
+
+  jobs:
+
+  - job: TerraformPlanPROD
+
+    pool:
+      vmImage: ubuntu-latest
+
+    steps:
+
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - script: |
+        terraform init
+        terraform workspace select prod || terraform workspace new prod
+        terraform plan \
+          -var-file=environments/prod.tfvars \
+          -out=tfplan
+      workingDirectory: $(workingDirectory)
+
+    - publish: $(workingDirectory)/tfplan
+      artifact: tfplan-prod
+
+
+#==========================================================
+# APPLY PROD
+#==========================================================
+
+- stage: Apply_PROD
+
+  dependsOn: Plan_PROD
+
+  jobs:
+
+  - deployment: ApplyPROD
+
+    environment: Production
+
+    strategy:
+
+      runOnce:
+
+        deploy:
+
+          steps:
+
+          - download: current
+            artifact: tfplan-prod
+
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - script: |
+              terraform init
+              terraform workspace select prod
+              terraform apply tfplan
+            workingDirectory: $(workingDirectory)
