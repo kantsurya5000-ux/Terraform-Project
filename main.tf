@@ -43,17 +43,17 @@ resource "azurerm_log_analytics_workspace" "aks" {
 resource "azurerm_kubernetes_cluster" "this" {
   #checkov:skip=CKV_AZURE_6: A private cluster has no public API endpoint; authorized IP ranges are inapplicable.
   #checkov:skip=CKV_AZURE_117: Platform-managed disk encryption is intentionally used; supply a customer-managed disk_encryption_set_id only when required by policy.
-  name                               = var.cluster.name
-  location                           = azurerm_resource_group.this.location
-  resource_group_name                = azurerm_resource_group.this.name
-  dns_prefix                         = var.cluster.dns_prefix
-  kubernetes_version                 = var.cluster.kubernetes_version
-  sku_tier                           = "Standard"
-  private_cluster_enabled            = true
+  name                                = var.cluster.name
+  location                            = azurerm_resource_group.this.location
+  resource_group_name                 = azurerm_resource_group.this.name
+  dns_prefix                          = var.cluster.dns_prefix
+  kubernetes_version                  = var.cluster.kubernetes_version
+  sku_tier                            = "Standard"
+  private_cluster_enabled             = true
   private_cluster_public_fqdn_enabled = false
-  local_account_disabled             = true
-  azure_policy_enabled               = true
-  automatic_upgrade_channel          = "patch"
+  local_account_disabled              = true
+  azure_policy_enabled                = true
+  automatic_upgrade_channel           = "patch"
 
   default_node_pool {
     name                         = "system"
