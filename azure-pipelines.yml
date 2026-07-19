@@ -116,6 +116,9 @@ stages:
         scriptLocation: 'inlineScript'
         workingDirectory: $(workingDirectory)
         inlineScript: |
+          export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+          export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
+
           terraform init
           terraform workspace select dev || terraform workspace new dev
           terraform plan \
@@ -163,6 +166,9 @@ stages:
               scriptLocation: 'inlineScript'
               workingDirectory: $(workingDirectory)
               inlineScript: |
+                export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+                export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
+
                 terraform init
                 terraform workspace select dev
                 terraform apply tfplan
@@ -197,6 +203,9 @@ stages:
         scriptLocation: 'inlineScript'
         workingDirectory: $(workingDirectory)
         inlineScript: |
+          export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+          export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
+
           terraform init
           terraform workspace select dev
           terraform output
@@ -232,6 +241,9 @@ stages:
         scriptLocation: 'inlineScript'
         workingDirectory: $(workingDirectory)
         inlineScript: |
+          export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+          export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
+
           terraform init
           terraform workspace select qa || terraform workspace new qa
           terraform plan \
@@ -279,6 +291,9 @@ stages:
               scriptLocation: 'inlineScript'
               workingDirectory: $(workingDirectory)
               inlineScript: |
+                export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+                export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
+
                 terraform init
                 terraform workspace select qa
                 terraform apply tfplan
@@ -313,6 +328,9 @@ stages:
         scriptLocation: 'inlineScript'
         workingDirectory: $(workingDirectory)
         inlineScript: |
+          export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+          export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
+
           terraform init
           terraform workspace select prod || terraform workspace new prod
           terraform plan \
@@ -360,6 +378,9 @@ stages:
               scriptLocation: 'inlineScript'
               workingDirectory: $(workingDirectory)
               inlineScript: |
+                export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+                export TF_VAR_tenant_id=$(az account show --query tenantId -o tsv)
+
                 terraform init
                 terraform workspace select prod
                 terraform apply tfplan
