@@ -39,6 +39,13 @@ stages:
     - script: |
         terraform fmt -check -recursive
       displayName: Terraform FMT
+    
+    - script: |
+        echo "Build.SourcesDirectory=$(Build.SourcesDirectory)"
+        pwd
+        ls -la
+        find . -maxdepth 2
+      displayName: "Debug Repository"
 
     - script: |
         terraform init -backend=false
